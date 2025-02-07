@@ -77,6 +77,7 @@ except ImportError:
     def isstring(s):
         return isinstance(s, str) #Python 3.x
 
+import os
 import threading
 import logging
 import time
@@ -95,6 +96,8 @@ from rospy.impl.statistics import SubscriberStatisticsLogger
 from rospy.impl.registration import get_topic_manager, set_topic_manager, Registration, get_registration_listeners
 from rospy.impl.tcpros import get_tcpros_handler, DEFAULT_BUFF_SIZE
 from rospy.impl.tcpros_pubsub import QueuedConnection
+
+from rospy.srv import AdaptorService, AdaptorServiceRequest, AdaptorServiceResponse
 
 _logger = logging.getLogger('rospy.topics')
 
@@ -610,6 +613,13 @@ class _SubscriberImpl(_TopicImpl):
         @type  data_class: L{Message} class
         """
         super(_SubscriberImpl, self).__init__(name, data_class)
+        
+        # Adaptor implementation
+        self.adaptor_info = {"freq": -1, "time_period": -1, "last_msg_time": time.time()}
+        self.adaptor_lock = threading.Lock()
+        self.adaptor_name = os.path.join(f"/adaptor_node/", rospy.get_name().strip('/'), "adaptor_sub", name.strip('/'))
+        self.adaptor_service = rospy.Service(self.adaptor_name, AdaptorService, lambda req: self.adjust_adaptor(req))
+
         # client-methods to invoke on new messages. should only modify
         # under lock. This is a list of 2-tuples (fn, args), where
         # args are additional arguments for the callback, or None
@@ -620,6 +630,12 @@ class _SubscriberImpl(_TopicImpl):
         self.statistics_logger = SubscriberStatisticsLogger(self) \
             if SubscriberStatisticsLogger.is_enabled() \
             else None
+    
+    def adjust_adaptor(self, req):
+        with self.adaptor_lock:
+            self.adaptor_info['freq'] = req.input_data
+
+        return AdaptorServiceResponse(f"[rospy::adaptor] updated {self.adaptor_name} freq to to {self.adaptor_info['freq']}")
 
     def close(self):
         """close I/O and release resources"""
@@ -760,6 +776,21 @@ class _SubscriberImpl(_TopicImpl):
         @param msgs: message data
         @type msgs: [L{Message}]
         """
+        adaptor_drop_msg = None
+        curr_time = time.time()
+        with self.adaptor_lock:
+            if self.adaptor_info['freq'] > 0 and curr_time - self.adaptor_info['last_msg_time'] >= (1.00 / self.adaptor_info['freq']):
+                adaptor_drop_msg = False
+                self.adaptor_info['last_msg_time'] = curr_time
+            else:
+                adaptor_drop_msg = True
+            
+            # for debugging
+            print(f"[{time.time()}] received callback. drop={adaptor_drop_msg}; freq={self.adaptor_info['freq']}")
+
+        if adaptor_drop_msg:
+            return
+        
         # save reference to avoid lock
         callbacks = self.callbacks
         for msg in msgs:
