@@ -615,10 +615,18 @@ class _SubscriberImpl(_TopicImpl):
         super(_SubscriberImpl, self).__init__(name, data_class)
         
         # Adaptor implementation
-        self.adaptor_info = {"freq": -1, "time_period": -1, "last_msg_time": time.time()}
-        self.adaptor_lock = threading.Lock()
-        self.adaptor_name = os.path.join(f"/adaptor_node/", rospy.get_name().strip('/'), "adaptor_sub", name.strip('/'))
-        self.adaptor_service = rospy.Service(self.adaptor_name, AdaptorService, lambda req: self.adjust_adaptor(req))
+        if name.strip('/') == "rosout":
+            adaptor_info_msg = f"[rospy] [{time.time()}] Node={rospy.get_name()}. NOT creating new topic because no adaptors on rosout."
+            self.adaptor_lock = None
+            self.adaptor_info = {"freq": None, "last_msg_time": None}
+        else:
+            self.adaptor_info = {"freq": -1, "last_msg_time": time.time()}
+            self.adaptor_lock = threading.Lock()
+            self.adaptor_name = os.path.join(f"/adaptor_node/", rospy.get_name().strip('/'), "adaptor_sub", name.strip('/'))
+            self.adaptor_service = rospy.Service(self.adaptor_name, AdaptorService, lambda req: self.adjust_adaptor(req))
+            adaptor_info_msg = f"[rospy] [{time.time()}] new subscriber in node={rospy.get_name()}, topic={name}, service={self.adaptor_name}"
+        _logger.info(adaptor_info_msg)
+        print(adaptor_info_msg)
 
         # client-methods to invoke on new messages. should only modify
         # under lock. This is a list of 2-tuples (fn, args), where
@@ -635,7 +643,7 @@ class _SubscriberImpl(_TopicImpl):
         with self.adaptor_lock:
             self.adaptor_info['freq'] = req.input_data
 
-        return AdaptorServiceResponse(f"[rospy::adaptor] updated {self.adaptor_name} freq to to {self.adaptor_info['freq']}")
+        return AdaptorServiceResponse(f"[rospy] adaptor {self.adaptor_name} updated freq is {self.adaptor_info['freq']}")
 
     def close(self):
         """close I/O and release resources"""
@@ -778,18 +786,25 @@ class _SubscriberImpl(_TopicImpl):
         """
         adaptor_drop_msg = None
         curr_time = time.time()
-        with self.adaptor_lock:
-            if self.adaptor_info['freq'] > 0 and curr_time - self.adaptor_info['last_msg_time'] >= (1.00 / self.adaptor_info['freq']):
-                adaptor_drop_msg = False
-                self.adaptor_info['last_msg_time'] = curr_time
-            else:
-                adaptor_drop_msg = True
-            
-            # for debugging
-            print(f"[{time.time()}] received callback. drop={adaptor_drop_msg}; freq={self.adaptor_info['freq']}")
-
+        
+        if self.adaptor_lock is not None:
+            with self.adaptor_lock:
+                if self.adaptor_info['freq'] > 0.0 and (curr_time - self.adaptor_info['last_msg_time'] < (1.00 / self.adaptor_info['freq'])):
+                    adaptor_drop_msg = True
+                else:
+                    adaptor_drop_msg = False
+        else:
+            adaptor_drop_msg = False 
+        
+        # for debugging
+        adaptor_callback_info = f"[rospy] [{time.time()}] received callback. drop={adaptor_drop_msg}; freq={self.adaptor_info['freq']}" 
+        # _logger.info(adaptor_callback_info)
+        # print(adaptor_callback_info)
+        
         if adaptor_drop_msg:
             return
+        else:
+            self.adaptor_info['last_msg_time'] = time.time()
         
         # save reference to avoid lock
         callbacks = self.callbacks
