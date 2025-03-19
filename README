@@ -1,0 +1,13 @@
+This is a modified `ros_comm` implementation that adds adaptors to the base image. 
+
+## Installation
+0. Use `dockerfile` to build the new ROS image with adaptors:
+```bash
+docker build -t rohit-ros .
+```
+
+1. To run the docker container:
+
+```bash
+docker run -d --gpus all --network host --cgroupns host --name rohit-ros -v ~/robot:/robot rohit-ros:latest sleep infinity
+```
