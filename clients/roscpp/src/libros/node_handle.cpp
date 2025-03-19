@@ -327,10 +327,12 @@ Publisher NodeHandle::advertise(AdvertiseOptions& ops)
 Subscriber NodeHandle::subscribe(SubscribeOptions& ops)
 {
   ops.topic = resolveName(ops.topic);
+  ROS_INFO("[NodeHandle::subscribe] topic=%s, ops.cb_queue=%d\n", ops.topic, ops.callback_queue);
   if (ops.callback_queue == 0)
   {
     if (callback_queue_)
     {
+      ROS_INFO("[NodeHandle::subscribe] topic=%s; callback_queue was true\n", ops.topic, ops.callback_queue);
       ops.callback_queue = callback_queue_;
     }
     else
@@ -341,6 +343,7 @@ Subscriber NodeHandle::subscribe(SubscribeOptions& ops)
 
   if (TopicManager::instance()->subscribe(ops))
   {
+    ROS_INFO("[NodeHandle::subscribe] topic=%s instance->subscribe() was true\n", ops.topic);
     Subscriber sub(ops.topic, *this, ops.helper);
 
     {
@@ -350,8 +353,8 @@ Subscriber NodeHandle::subscribe(SubscribeOptions& ops)
 
     return sub;
   }
-
-  return Subscriber();
+  Subscriber sub;
+  return sub;
 }
 
 ServiceServer NodeHandle::advertiseService(AdvertiseServiceOptions& ops)

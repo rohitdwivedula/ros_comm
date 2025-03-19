@@ -76,16 +76,19 @@ Subscription::Subscription(const std::string &name, const std::string& md5sum, c
 , shutting_down_(false)
 , transport_hints_(transport_hints)
 {
+  adaptor_service_initialized_ = false;
   setupAdaptorService();
 }
 
 void Subscription::setupAdaptorService() {
+    std::string service_name = "/adaptor_node/" + ros::this_node::getName() + "/adaptor_sub/" + name_;
+
     if (adaptor_service_initialized_) {
+	ROS_INFO("[roscpp] Skip setting up: %s", service_name.c_str());
         return;  // Avoid duplicate service registration
     }
 
     ros::NodeHandle nh;
-    std::string service_name = "/adaptor_node/" + ros::this_node::getName() + "/adaptor_sub/" + name_;
     adaptor_service_ = nh.advertiseService(service_name, &Subscription::adjustAdaptorCallback, this);
 
     adaptor_service_initialized_ = true;
