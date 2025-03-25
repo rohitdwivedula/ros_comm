@@ -1,7 +1,7 @@
 This is a modified `ros_comm` implementation that adds adaptors to the base image. 
 
 ## Installation
-0. Use `dockerfile` to build the new ROS image with adaptors:
+0. Use `dockerfile` to build the new ROS image with adaptors (CPU only - no GPU support):
 ```bash
 docker build -t rohit-ros .
 ```
