@@ -20,7 +20,7 @@ RUN cd ~/ros_catkin_ws && rosdep install --from-paths ./src --ignore-packages-fr
 # clone ros_comm
 ENV GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no"
 RUN mkdir -p /root/.ssh
-RUN apt-get install -y git wget
+RUN apt-get install -y git wget ccache tree
 
 COPY id_rsa /root/.ssh/
 RUN cd /root/.ssh && chmod 400 id_rsa 
